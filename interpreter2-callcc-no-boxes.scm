@@ -1,11 +1,13 @@
 ; If you are using racket instead of scheme, uncomment these two lines, comment the (load "simpleParser.scm") and uncomment the (require "simpleParser.scm")
 ; #lang racket
 ; (require "simpleParser.scm")
-(load "simpleParser.scm")
+(load "functionParser.scm")
+
+; Huvra: W 5:42p >> Updated functionParser.scm
 
 
 ; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
-(define call/cc call-with-current-continuation)
+;(define call/cc call-with-current-continuation)
 
 
 ; The functions that start interpret-...  all return the current environment.
