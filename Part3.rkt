@@ -11,6 +11,8 @@
 ; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
 ;(define call/cc call-with-current-continuation)
 
+(parser "test.java")
+
 
 ; The functions that start interpret-...  all return the current environment. << enviornment is referencing the "state"
 ; The functions that start eval-...  all return a value
