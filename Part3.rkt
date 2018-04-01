@@ -4,15 +4,13 @@
 (load "functionParser.scm")
 
 ; Huvra: W 5:42p >> Updated functionParser.scm
-; Peter: W 5:46p >> did nothing
+; Peter: S 1:07a >> I'm back
 ; Raza: W 5:51p >> Can you make a change to part3 and then put it back again.
-
 
 ; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
 ;(define call/cc call-with-current-continuation)
 
-(parser "test.java")
-
+(parser "basic.java")
 
 ; The functions that start interpret-...  all return the current environment. << enviornment is referencing the "state"
 ; The functions that start eval-...  all return a value
@@ -49,7 +47,27 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw)) ; begin << creates a new layer in the enviornment
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw)) ; throw
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw)) ; try-catch-finally
+      
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment)); defines the functions (add binding)
+      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment)); ??? reuturn break continue throw)); call or runs the functions from bindings
+                       
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
+
+;;;;;;;;;;;;;;;;;;; FUNCTION BIND ;;;;;;;;;;;;;;;;;;; Peter 1:12a
+
+; should be similar to declare
+
+(define interpret-function
+   (lambda (statement environment)
+     ;(cadr statement) ; function name
+     ;(caddr statement) ; function formal parameters
+     ;(cadddr statement) ; body of function
+  0))
+
+
+;;;;;;;;;;;;;;;;;;; FUNCTION CALL ;;;;;;;;;;;;;;;;;;;
+
+; will be its own thing
 
 ;;;;;;;;;;;;;;;;;;; RETURN ;;;;;;;;;;;;;;;;;;;
 
@@ -57,7 +75,6 @@
 (define interpret-return
   (lambda (statement environment return)
     (return (eval-expression (get-expr statement) environment))))
-
 
 ;;;;;;;;;;;;;;;;;;; Variable Declare ;;;;;;;;;;;;;;;;;;;
 
@@ -405,8 +422,6 @@
       ((eq? v #t) 'true)
       (else v))))
 
-
-
 ; Because the error function is not defined in R5RS scheme, I create my own:
 (define error-break (lambda (v) v))
 (call-with-current-continuation (lambda (k) (set! error-break k)))
@@ -418,4 +433,3 @@
                             str
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
-
