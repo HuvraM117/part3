@@ -50,32 +50,44 @@
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw)) ; throw
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw)) ; try-catch-finally
       
-      ((eq? 'function (statement-type statement)) (interpret-function statement environment)); defines the functions (add binding)
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
       ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment)); ??? reuturn break continue throw)); call or runs the functions from bindings
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
 
 ;;;;;;;;;;;;;;;;;;; FUNCTION BIND ;;;;;;;;;;;;;;;;;;; Peter 1:12a
 
-; should be similar to declare
-
 (define interpret-function
-   (lambda (statement environment)
-;     (if (exists-function-def? statement)
-;         (insert (get-bind-func statement) (create-closure (get-closure statement) environment) environment)
-;         (error "Bad"))
-     ;(cadr statement) ; function name
-     ;(caddr statement) ; function formal parameters
-     ;(cadddr statement) ; body of function
-     0))
+   (lambda (statement environment return break continue throw)
+     (cond
+       ((null? statement) (error "Mistake?"))
+       ((insert (f_name statement)
+                (list (f_parameters statement) (f_body statement) (lambda (state) (trim-state (f_name statement) state))) environment)))))
 
-;(define exists-function-def? exists-operand2?)
+;; abstractions
+(define f_name ;function name 
+  (lambda (statement)
+    (cadr statement))) 
+(define f_parameters ;function parameters
+  (lambda (statement)
+    (caddr statement))) 
+(define f_body ;function body 
+  (lambda (statement)
+    (cadddr statement))) 
 
-;  (lambda (statement environment)
-;    (if (exists-declare-value? statement)
-;        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment) environment)
-;        (insert (get-declare-var statement) 'novalue environment))))
+; Establish scope of the function
+(define trim-state
+  (lambda (f_name state)
+    (if (null? state)
+        (error "Function name not found.")
+          (if (eq? (value f_name state) 'not_found)
+              (trim-state funcname (cdr state))
+              state))))
 
+; abstractions
+(define value
+  (lambda (f_name state)
+    (lookup-in-frame f_name (car state))))
 
 ;;;;;;;;;;;;;;;;;;; FUNCTION CALL ;;;;;;;;;;;;;;;;;;;
 
@@ -355,7 +367,7 @@
       ((exists-in-list? var (variables (topframe environment))) (lookup-in-frame var (topframe environment)))
       (else (lookup-in-env var (cdr environment))))))
 
-; Return the value bound to a variable in the frame
+; Return the value bound to a variable in the frame << lookup layer 
 (define lookup-in-frame
   (lambda (var frame)
     (cond
@@ -454,5 +466,10 @@
       (error-break (display (string-append str (makestr "" vals)))))))
 
 (trace interpret)
+(trace insert)
+(trace interpret-function)
+(trace trim-state)
+(trace add-to-frame)
+(trace lookup-in-frame)
 (interpret "basic.java")
 
