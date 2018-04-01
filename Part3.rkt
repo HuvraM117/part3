@@ -2,6 +2,7 @@
 ; #lang racket
 ; (require "simpleParser.scm")
 (load "functionParser.scm")
+(require racket/trace)
 
 ; Huvra: W 5:42p >> Updated functionParser.scm
 ; Peter: S 1:07a >> I'm back
@@ -11,6 +12,7 @@
 ;(define call/cc call-with-current-continuation)
 
 (parser "basic.java")
+
 
 ; The functions that start interpret-...  all return the current environment. << enviornment is referencing the "state"
 ; The functions that start eval-...  all return a value
@@ -59,15 +61,32 @@
 
 (define interpret-function
    (lambda (statement environment)
+;     (if (exists-function-def? statement)
+;         (insert (get-bind-func statement) (create-closure (get-closure statement) environment) environment)
+;         (error "Bad"))
      ;(cadr statement) ; function name
      ;(caddr statement) ; function formal parameters
      ;(cadddr statement) ; body of function
-  0))
+     0))
+
+;(define exists-function-def? exists-operand2?)
+
+;  (lambda (statement environment)
+;    (if (exists-declare-value? statement)
+;        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment) environment)
+;        (insert (get-declare-var statement) 'novalue environment))))
 
 
 ;;;;;;;;;;;;;;;;;;; FUNCTION CALL ;;;;;;;;;;;;;;;;;;;
 
 ; will be its own thing
+
+(define interpret-funcall
+  (lambda (statement environment)
+     ;(cadr statement) ; function name
+     ;(caddr statement) ; function formal parameters
+     ;(cadddr statement) ; body of function
+    0))
 
 ;;;;;;;;;;;;;;;;;;; RETURN ;;;;;;;;;;;;;;;;;;;
 
@@ -433,3 +452,7 @@
                             str
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
+
+(trace interpret)
+(interpret "basic.java")
+
