@@ -51,7 +51,7 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw)) ; try-catch-finally
       
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
-      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment)); ??? reuturn break continue throw)); call or runs the functions from bindings
+      ((eq? 'funcall (statement-type statement)) (myerror "Where are you"));(interpret-funcall statement environment)); ??? reuturn break continue throw)); call or runs the functions from bindings
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
 
@@ -252,6 +252,7 @@
       ((eq? '>= (operator expr)) (>= op1value (eval-expression (operand2 expr) environment)))
       ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment)))
       ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment)))
+      ((eq? 'funcall (operator expr)) (myerror "good start"))
       (else (myerror "Unknown operator:" (operator expr))))))
 
 ; Determines if two values are equal.  We need a special test because there are both boolean and integer types.
