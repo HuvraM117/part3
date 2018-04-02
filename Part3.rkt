@@ -11,8 +11,6 @@
 ; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
 ;(define call/cc call-with-current-continuation)
 
-(parser "basic.java")
-
 
 ; The functions that start interpret-...  all return the current environment. << enviornment is referencing the "state"
 ; The functions that start eval-...  all return a value
@@ -100,7 +98,7 @@
   (lambda (statement environment return break continue throw)
     (call/cc
        (lambda (return)
-         (interpret-stmtlist (cadr (closure (f_name statement) environment)) (newstate statement environment return break continue throw) return break continue throw)))))
+         (interpret-statement-list (cadr (closure (f_name statement) environment)) (newstate statement environment return break continue throw) return break continue throw)))))
 
 (define closure ;get the closure
   (lambda (f_name environment)
@@ -123,11 +121,6 @@
     (cons (actual_param_layer (car (closure (f_name statement) environment)) (cddr statement) environment return break continue) ;returns an empty state right now
                            ( (caddr (closure (f_name statement) environment)) environment))))
 
-
-(define interpret-stmtlist
-  (lambda (statement enviornment return break continue throw)
-    (if (null? statement) enviornment
-        (interpret-stmtlist (cdr statement) (interpret-statement (car statement) enviornment return break continue throw) return break continue throw))))
 ;;;;;;;;;;;;;;;;;;; RETURN ;;;;;;;;;;;;;;;;;;;
 
 ; Calls the return continuation with the given expression value
@@ -250,7 +243,7 @@
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
-      ((and (not (null? (cdr expr))) (eq? 'funcall (operator expr))) (interpret-funcall expr environment null null null null))
+      ((and (list? expr) (eq? 'funcall (operator expr))) (interpret-funcall expr environment null null null null))
       ;((eq? 'funcall (operator expr)) (interpret-funcall expr environment null null null null))
       ((not (list? expr)) (lookup expr environment))
       (else (eval-operator expr environment)))))
@@ -496,11 +489,18 @@
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
 
-(trace interpret)
-(trace insert)
 (trace interpret-function)
-(trace interpret-funcall)
-(trace closure)
-(trace lim-env)
-(interpret "basic.java")
+(trace interpret)
 
+(parser "basic.java") 
+(interpret "basic.java")
+(parser "test1.java") ; return 10 
+(interpret "test1.java")
+(parser "test2.java") ; return 14
+(interpret "test2.java")
+(parser "test3.java") ; return 45
+(interpret "test3.java")
+(parser "test4.java") ; return 55
+(interpret "test4.java")
+;(parser "test5.java") ; return 1
+;(interpret "test5.java")
