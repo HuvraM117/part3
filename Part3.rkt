@@ -51,7 +51,7 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw)) ; try-catch-finally
       
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
-      ((eq? 'funcall (statement-type statement)) (myerror "funcall I guess"));(interpret-funcall statement environment)); ??? reuturn break continue throw)); call or runs the functions from bindings
+      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw));(interpret-funcall statement environment)); ??? reuturn break continue throw)); call or runs the functions from bindings
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
 
@@ -65,13 +65,18 @@
                 (list (f_parameters statement) (f_body statement) (lambda (state) (trim-state (f_name statement) state))) environment)))))
 
 ;; abstractions
-(define f_name ;function name 
+;function name 
+(define f_name 
   (lambda (statement)
-    (cadr statement))) 
-(define f_parameters ;function parameters
+    (cadr statement)))
+
+;function parameters
+(define f_parameters 
   (lambda (statement)
-    (caddr statement))) 
-(define f_body ;function body 
+    (caddr statement)))
+
+;function body
+(define f_body 
   (lambda (statement)
     (cadddr statement))) 
 
@@ -94,11 +99,13 @@
 ; will be its own thing
 
 (define interpret-funcall
-  (lambda (statement environment)
-     ;(cadr statement) ; function name
-     ;(caddr statement) ; function formal parameters
-     ;(cadddr statement) ; body of function
-    0))
+    (lambda (statement environment return break continue throw)
+      (call/cc
+       (lambda (return)
+         (interpret-statement (closure_body newenv return break continue throw))))))
+
+(define closure_body
+  (lambda (statement enviornment)
 
 ;;;;;;;;;;;;;;;;;;; RETURN ;;;;;;;;;;;;;;;;;;;
 
@@ -222,7 +229,8 @@
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
-      ((eq? 'funcall (operator expr)) (myerror "better"))
+      ((eq? 'funcall (operator expr)) (interpret-funcall expr environment null null null null))
+      ((eq? 'function (operator expr)) (interpret-funcall expr environment null null null null))
       ((not (list? expr)) (lookup expr environment))
       (else (eval-operator expr environment)))))
 
