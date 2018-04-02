@@ -490,6 +490,7 @@
       (error-break (display (string-append str (makestr "" vals)))))))
 
 (trace interpret-function)
+(trace interpret-funcall)
 (trace interpret)
 
 (parser "basic.java") 
@@ -504,3 +505,39 @@
 (interpret "test4.java")
 ;(parser "test5.java") ; return 1
 ;(interpret "test5.java")
+;(parser "test6.java") ; return 115
+;(interpret "test6.java")
+;(parser "test7.java") ; return true
+;(interpret "test7.java")
+;(parser "test8.java") ; return 20
+;(interpret "test8.java")
+;(parser "test9.java") ; return 24
+;(interpret "test9.java")
+;(parser "test10.java") ; return 2
+;(interpret "test10.java")
+;(parser "test11.java") ; return 35
+;(interpret "test11.java")
+;(parser "test12.java") ; return error
+;(interpret "test12.java")
+;(parser "test13.java") ; return 90
+;(interpret "test13.java")
+;(parser "test14.java") ; return 69
+;(interpret "test14.java")
+;(parser "test15.java") ; return 87
+;(interpret "test15.java")
+;(parser "test16.java") ; return 64
+;(interpret "test16.java")
+;(parser "test17.java") ; return error
+;(interpret "test17.java")
+;(parser "test18.java") ; return 125
+;(interpret "test18.java")
+;(parser "test19.java") ; return 100
+;(interpret "test19.java")
+;(parser "test20.java") ; return 2000400
+;(interpret "test20.java")
+;(parser "test21.java") ; return 3421
+;(interpret "test21.java")
+;(parser "test22.java") ; return 20332
+;(interpret "test22.java")
+;(parser "test23.java") ; return 21
+;(interpret "test23.java")
