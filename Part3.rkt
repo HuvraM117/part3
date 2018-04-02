@@ -107,10 +107,20 @@
       ((exists? f_name environment) (lookup f_name environment))
       (else (error "do I have to remove a layer or not?" ) )))) ;(lookup f_name (cdr environment)))))
 
-;for the first test only main function is called so the state returned will be empty which is appended in newstate
-(define actual_param_layer
+; Returns the state of function. Before it was just empty now hopefully it returns the new state with the actual parameters for the function.
+; Haven't tested it though
+(define actual_param_layer  
     (lambda (formal actual state return break continue)
-      '(() ())))
+     (cond
+     ((and (null? formal) (null? actual)) '(() ()))
+     ((or (null? formal) (null? actual)) (error "Incorrect number of args."))
+     ((eq? '& (car formal)) (add-to-layer (actual_param_layer (cddr formal) (cdr actual)
+                                                                  state return break continue)
+                                          (cadr formal)
+                                          (state-lookup-box state (car actual))))
+     (else (add-to-layer (actual_param_layer (cdr formal) (cdr actual)
+                                                 state return break continue)
+                         (car formal) (eval-expression (car actual) state ))))))
 
 (define add-to-layer
   (lambda (layer var value)
