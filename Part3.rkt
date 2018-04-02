@@ -38,7 +38,7 @@
 (define interpret-statement
   (lambda (statement environment return break continue throw)
     (cond
-      ((eq? 'return (statement-type statement)) (interpret-return statement environment return)) ; return
+      ((eq? 'return (statement-type statement)) (interpret-return statement environment return break continue throw)) ; return
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment return break continue throw)) ; variable creation
       ((eq? '= (statement-type statement)) (interpret-assign statement environment return break continue throw)) ; assign variable
       ((eq? 'if (statement-type statement)) (interpret-if statement environment return break continue throw)) ;if 
@@ -46,7 +46,7 @@
       ((eq? 'continue (statement-type statement)) (continue environment)) ; continue
       ((eq? 'break (statement-type statement)) (break environment)) ; break
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw)) ; begin << creates a new layer in the enviornment
-      ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw)) ; throw
+      ((eq? 'throw (statement-type statement)) (interpret-throw statement environment return break continue throw)) ; throw
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw)) ; try-catch-finally
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
 
@@ -143,8 +143,8 @@
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
-  (lambda (statement environment return)
-    (return (eval-expression (get-expr statement) environment return null null null))))
+  (lambda (statement environment return break continue throw)
+    (return (eval-expression (get-expr statement) environment return break continue throw))))
 
 ;;;;;;;;;;;;;;;;;;; Variable Declare ;;;;;;;;;;;;;;;;;;;
 
@@ -200,8 +200,8 @@
 
 ; We use a continuation to throw the proper value. Because we are not using boxes, the environment/state must be thrown as well so any environment changes will be kept
 (define interpret-throw
-  (lambda (statement environment throw)
-    (throw (eval-expression (get-expr statement) environment) environment)))
+  (lambda (statement environment return break continue throw)
+    (throw (eval-expression (get-expr statement) environment return break continue throw) environment)))
 
 ; Interpret a try-catch-finally block
 
@@ -394,7 +394,6 @@
     (cond
       ((null? S) #f)
       ((null? (car S)) #f)
-      ((state_empty S) #f)
       ((eq? (car S) var) #t)
       (else (if_variable_there var (cdr S) )))))
 
@@ -527,9 +526,6 @@
       (error-break (display (string-append str (makestr "" vals)))))))
 
 
-
-(trace state_empty)
-
 ;(parser "basic.java") 
 ;(interpret "basic.java")
 ;(parser "test1.java") ; return 10 
@@ -542,40 +538,44 @@
 ;(interpret "test4.java")
 ;(parser "test5.java") ; return 1
 ;(interpret "test5.java")
-
-;(parser "test6.java") ; return 115 >> WTF? functionParser.scm:56:14: parser: Illegal start of top level statement
+;(parser "test6.java") ; return 115 
 ;(interpret "test6.java")
-
 ;(parser "test7.java") ; return true
 ;(interpret "test7.java")
 ;(parser "test8.java") ; return 20
 ;(interpret "test8.java")
 ;(parser "test9.java") ; return 24
 ;(interpret "test9.java")
-(parser "test10.java") ; return 2
-(interpret "test10.java")
 ;(parser "test11.java") ; return 35
 ;(interpret "test11.java")
-
-;(parser "test12.java") ; return error >> issue with actual_param_layer
+;(parser "test12.java") ; return error "Incorrect number of args."
 ;(interpret "test12.java")
-
 ;(parser "test13.java") ; return 90
 ;(interpret "test13.java")
 
+
+
+; DON'T WORK?!
+;(parser "test10.java") ; return 2 >> 3 error
+;(interpret "test10.java")
+
+
+
+; BOXES
 ;(parser "test14.java") ; return 69
 ;(interpret "test14.java")
-;(parser "test15.java") ; return 87
+
+;(parser "test15.java") ; return 87 >> error: car: contract violation expected: pair? given: ()
 ;(interpret "test15.java")
-;(parser "test16.java") ; return 64
+;(parser "test16.java") ; return 64 >> error: car: contract violation expected: pair? given: ()
 ;(interpret "test16.java")
-;(parser "test17.java") ; return error
+;(parser "test17.java") ; return error >> error: car: contract violation expected: pair? given: ()
 ;(interpret "test17.java")
-;(parser "test18.java") ; return 125
+;(parser "test18.java") ; return 125 >> error: car: contract violation expected: pair? given: ()
 ;(interpret "test18.java")
-;(parser "test19.java") ; return 100
+;(parser "test19.java") ; return 100 >> error: car: contract violation expected: pair? given: ()
 ;(interpret "test19.java")
 
-;(parser "test20.java") ; return 2000400 >> ERROR: Eval Issue 
+;(parser "test20.java") ; return 2000400 >> error: undefined variable x
 ;(interpret "test20.java")
 
