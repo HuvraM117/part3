@@ -6,7 +6,7 @@
 
 ; Huvra: W 5:42p >> Updated functionParser.scm
 ; Peter: S 1:07a >> I'm back
-; Raza: W 5:51p >> Can you make a change to part3 and then put it back again.
+; Raza: M 0:51p >> There's an error but the main error is that eval-expression only evaluates arithmetic expression and it cannot do functions.
 
 ; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
 ;(define call/cc call-with-current-continuation)
@@ -49,9 +49,9 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw)) ; begin << creates a new layer in the enviornment
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw)) ; throw
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw)) ; try-catch-finally
-      
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
-      ((eq? 'funcall (statement-type statement)) (myerror "funcall I guess"));(interpret-funcall statement environment)); ??? reuturn break continue throw)); call or runs the functions from bindings
+
+      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw)); ??? reuturn break continue throw)); call or runs the functions from bindings
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
 
@@ -93,12 +93,35 @@
 
 ; will be its own thing
 
+;Raza 1st April 2021 11:35. The following functions are imitated from a correctly working code so the author
+;doesn't know of how exactly they function. Giving an error at err but it might be due to other problems.
+
 (define interpret-funcall
-  (lambda (statement environment)
-     ;(cadr statement) ; function name
-     ;(caddr statement) ; function formal parameters
-     ;(cadddr statement) ; body of function
-    0))
+  (lambda (statement environment return break continue throw)
+    (call/cc
+       (lambda (return)
+         (eval-expression (cadr (closure (f_name statement) environment)) (newstate statement environment return break continue throw) )))))
+
+(define closure ;get the closure
+  (lambda (f_name environment)
+    (cond
+      ((null? environment) (error "Error: Attempted to call a function that has not been initialized in scope." fun-name))
+      ((exists? f_name environment) (lookup f_name environment))
+      (else (error "do I have to remove a layer or not?" ) )))) ;(lookup f_name (cdr environment)))))
+
+;for the first test only main function is called so the state returned will be empty which is appended in newstate
+(define actual_param_layer
+    (lambda (formal actual state return break continue)
+      '(() ())))
+
+(define add-to-layer
+  (lambda (layer var value)
+    (list (cons var (car layer)) (cons value (cadr layer)))))
+
+(define newstate
+  (lambda (statement environment return break continue throw)
+    (cons (actual_param_layer (car (closure (f_name statement) environment)) (cddr statement) environment return break continue) ;returns an empty state right now
+                           ( (caddr (closure (f_name statement) environment)) environment))))
 
 ;;;;;;;;;;;;;;;;;;; RETURN ;;;;;;;;;;;;;;;;;;;
 
@@ -222,7 +245,7 @@
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
-      ((eq? 'funcall (operator expr)) (myerror "better"))
+      ((eq? 'funcall (operator expr)) (interpret-funcall expr environment null null null null))
       ((not (list? expr)) (lookup expr environment))
       (else (eval-operator expr environment)))))
 
@@ -470,8 +493,11 @@
 (trace interpret)
 (trace insert)
 (trace interpret-function)
+(trace interpret-funcall)
+(trace closure)
 (trace trim-state)
 (trace add-to-frame)
 (trace lookup-in-frame)
+(trace eval-expression)
 (interpret "basic.java")
 
