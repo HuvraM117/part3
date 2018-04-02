@@ -62,7 +62,7 @@
      (cond
        ((null? statement) (error "Mistake?"))
        ((insert (f_name statement)
-                (list (f_parameters statement) (f_body statement) (lambda (state) (trim-state (f_name statement) state))) environment)))))
+                (list (f_parameters statement) (f_body statement) (lambda (state) (lim-env (f_name statement) state))) environment)))))
 
 ;; abstractions
 (define f_name ;function name 
@@ -76,7 +76,7 @@
     (cadddr statement))) 
 
 ; Establish scope of the function
-(define trim-state
+(define lim-env
   (lambda (f_name state)
     (if (null? state)
         (error "Function name not found.")
@@ -100,7 +100,7 @@
   (lambda (statement environment return break continue throw)
     (call/cc
        (lambda (return)
-         (eval-expression (cadr (closure (f_name statement) environment)) (newstate statement environment return break continue throw) )))))
+         (interpret-stmtlist (cadr (closure (f_name statement) environment)) (newstate statement environment return break continue throw) return break continue throw)))))
 
 (define closure ;get the closure
   (lambda (f_name environment)
@@ -123,6 +123,11 @@
     (cons (actual_param_layer (car (closure (f_name statement) environment)) (cddr statement) environment return break continue) ;returns an empty state right now
                            ( (caddr (closure (f_name statement) environment)) environment))))
 
+
+(define interpret-stmtlist
+  (lambda (statement enviornment return break continue throw)
+    (if (null? statement) enviornment
+        (interpret-stmtlist (cdr statement) (interpret-statement (car statement) enviornment return break continue throw) return break continue throw))))
 ;;;;;;;;;;;;;;;;;;; RETURN ;;;;;;;;;;;;;;;;;;;
 
 ; Calls the return continuation with the given expression value
@@ -135,8 +140,7 @@
 ; Adds a new variable binding to the environment.  There may be an assignment with the variable
 (define interpret-declare
   (lambda (statement environment)
-    (if (exists-declare-value? statement)
-        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment) environment)
+    (if (exists-declare-value? statement) (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment) environment)
         (insert (get-declare-var statement) 'novalue environment))))
 
 ;;;;;;;;;;;;;;;;;;; Assignment ;;;;;;;;;;;;;;;;;;;
@@ -242,10 +246,12 @@
 (define eval-expression
   (lambda (expr environment)
     (cond
+      
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
-      ((eq? 'funcall (operator expr)) (interpret-funcall expr environment null null null null))
+      ((and (not (null? (cdr expr))) (eq? 'funcall (operator expr))) (interpret-funcall expr environment null null null null))
+      ;((eq? 'funcall (operator expr)) (interpret-funcall expr environment null null null null))
       ((not (list? expr)) (lookup expr environment))
       (else (eval-operator expr environment)))))
 
@@ -495,9 +501,6 @@
 (trace interpret-function)
 (trace interpret-funcall)
 (trace closure)
-(trace trim-state)
-(trace add-to-frame)
-(trace lookup-in-frame)
-(trace eval-expression)
+(trace lim-env)
 (interpret "basic.java")
 
