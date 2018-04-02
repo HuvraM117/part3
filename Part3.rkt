@@ -61,33 +61,31 @@
      (cond
        ((null? statement) (error "Mistake?"))
        ((insert (f_name statement)
-                (list (f_parameters statement) (f_body statement) (lambda (state) (lim-env (f_name statement) state))) environment)))))
+                (list (f_parameters statement) (f_body statement) (lambda (state) (lim-env statement state))) environment)))))
 
-;; abstractions
+;; Abstractions
 (define f_name ;function name 
   (lambda (statement)
-    (cadr statement))) 
+    (cadr statement)))
+
 (define f_parameters ;function parameters
   (lambda (statement)
-    (caddr statement))) 
+    (caddr statement)))
+
 (define f_body ;function body 
   (lambda (statement)
     (cadddr statement))) 
 
 ; Establish scope of the function
 (define lim-env
-  (lambda (f_name state)
-    (if (null? state)
-        (error "Function name not found.")
-          (if (eq? (value f_name state) 'not_found)
-              (trim-state funcname (cdr state))
-              state))))
-
-; abstractions
-(define value
-  (lambda (f_name state)
-    (lookup-in-frame f_name (car state))))
-
+  (lambda (statement enviornment)
+    (cond
+      ((null? enviornment) enviornment)
+      ((null? (cdr enviornment)) enviornment)
+      ((exists? (f_name statement) (car enviornment)) enviornment)
+      (else (lim-env statement (cdr enviornment))))))
+       
+                          
 ;;;;;;;;;;;;;;;;;;; FUNCTION CALL ;;;;;;;;;;;;;;;;;;;
 
 ; will be its own thing
@@ -99,17 +97,25 @@
   (lambda (statement environment return break continue throw)
     (call/cc
        (lambda (return)
-         (interpret-statement-list (cadr (closure (f_name statement) environment)) (newstate statement environment return break continue throw) return break continue throw)))))
-
-(define closure ;get the closure
+         (interpret-statement-list (closure_body
+                                    (closure (f_name statement) environment))
+                                   (newstate statement environment return break continue throw)
+                                   return break continue throw)))))
+; Get the closure
+(define closure 
   (lambda (f_name environment)
     (cond
       ((null? environment) (error "Error: Attempted to call a function that has not been initialized in scope." fun-name))
       ((exists? f_name environment) (lookup f_name environment))
       (else (error "do I have to remove a layer or not?" ) )))) ;(lookup f_name (cdr environment)))))
 
+; Returns the new state for the function 
+(define newstate
+  (lambda (statement environment return break continue throw)
+    (cons (actual_param_layer (car (closure (f_name statement) environment)) (cddr statement) environment return break continue)
+          ( (caddr (closure (f_name statement) environment)) environment))))
+
 ; Returns the state of function. Before it was just empty now hopefully it returns the new state with the actual parameters for the function.
-; Haven't tested it though
 (define actual_param_layer  
     (lambda (formal actual state return break continue)
      (cond
@@ -118,7 +124,7 @@
      ((eq? '& (car formal)) (add-to-layer (actual_param_layer (cddr formal) (cdr actual)
                                                                   state return break continue)
                                           (cadr formal)
-                                          (state-lookup-box state (car actual))))
+                                          (lookup-in-env state (car actual)))) ;;;;; STATE-LOOKUP-BOX
      (else (add-to-layer (actual_param_layer (cdr formal) (cdr actual)
                                                  state return break continue)
                          (car formal) (eval-expression (car actual) state return break continue null))))))
@@ -127,10 +133,11 @@
   (lambda (layer var value)
     (list (cons var (car layer)) (cons value (cadr layer)))))
 
-(define newstate
-  (lambda (statement environment return break continue throw)
-    (cons (actual_param_layer (car (closure (f_name statement) environment)) (cddr statement) environment return break continue) ;returns an empty state right now
-                           ( (caddr (closure (f_name statement) environment)) environment))))
+;: Abstractions
+(define closure_body
+  (lambda (statement)
+    (cadr statement)))
+
 
 ;;;;;;;;;;;;;;;;;;; RETURN ;;;;;;;;;;;;;;;;;;;
 
@@ -254,8 +261,7 @@
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f) ;;
-      ((and (list? expr) (eq? 'funcall (operator expr))) (interpret-funcall expr environment return break continue throw)) ; Peter M 11:04a
-      ;((eq? 'funcall (operator expr)) (interpret-funcall expr environment null null null null))
+      ((and (list? expr) (eq? 'funcall (operator expr))) (interpret-funcall expr environment return break continue throw))
       ((not (list? expr)) (lookup expr environment))
       (else (eval-operator expr environment return break continue throw)))))
 
@@ -282,11 +288,10 @@
       ((eq? '!= (operator expr)) (not (isequal op1value (eval-expression (operand2 expr) environment return break continue throw))))
       ((eq? '< (operator expr)) (< op1value (eval-expression (operand2 expr) environment return break continue throw)))
       ((eq? '> (operator expr)) (> op1value (eval-expression (operand2 expr) environment return break continue throw)))
-      ((eq? '<= (operator expr)) (<= op1value (eval-expression (operand2 expr) environment)))
-      ((eq? '>= (operator expr)) (>= op1value (eval-expression (operand2 expr) environment)))
-      ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment)))
-      ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment)))
-      ;((eq? 'funcall (operator expr)) (myerror "good start"))
+      ((eq? '<= (operator expr)) (<= op1value (eval-expression (operand2 expr) environment return break continue throw)))
+      ((eq? '>= (operator expr)) (>= op1value (eval-expression (operand2 expr) environment return break continue throw)))
+      ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment return break continue throw)))
+      ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment return break continue throw)))
       (else (myerror "Unknown operator:" (operator expr))))))
 
 ; Determines if two values are equal.  We need a special test because there are both boolean and integer types.
@@ -370,8 +375,29 @@
   (lambda (var environment)
     (cond
       ((null? environment) #f)
-      ((exists-in-list? var (variables (topframe environment))) #t)
+      ((state_empty environment) #f)
+      ((list? (variables (topframe environment))) (exists-in-list? var (variables (topframe environment))) #t)
+      ((if_variable_there var (topframe environment)) #t)
       (else (exists? var (remainingframes environment))))))
+
+;Checks for empty state on list of states like '( ( () ()) (() ()))
+(define state_empty
+  (lambda (S)
+    (cond
+      ((null? S) #t)
+      ((not (null? (car S))) #f)
+      ((and (null? (car S)) (null? (cdr S))) #t)
+      (else (state_empty (cdr S))))))
+
+(define if_variable_there
+  (lambda (var S)
+    (cond
+      ((null? S) #f)
+      ((null? (car S)) #f)
+      ((state_empty S) #f)
+      ((eq? (car S) var) #t)
+      (else (if_variable_there var (cdr S) )))))
+
 
 ; does a variable exist in a list?
 (define exists-in-list?
@@ -500,38 +526,43 @@
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
 
-(trace interpret-function)
-(trace interpret-funcall)
-(trace interpret)
 
-(parser "basic.java") 
-(interpret "basic.java")
-(parser "test1.java") ; return 10 
-(interpret "test1.java")
-(parser "test2.java") ; return 14
-(interpret "test2.java")
-(parser "test3.java") ; return 45
-(interpret "test3.java")
-(parser "test4.java") ; return 55
-(interpret "test4.java")
+
+(trace state_empty)
+
+;(parser "basic.java") 
+;(interpret "basic.java")
+;(parser "test1.java") ; return 10 
+;(interpret "test1.java")
+;(parser "test2.java") ; return 14
+;(interpret "test2.java")
+;(parser "test3.java") ; return 45
+;(interpret "test3.java")
+;(parser "test4.java") ; return 55
+;(interpret "test4.java")
 ;(parser "test5.java") ; return 1
 ;(interpret "test5.java")
-;(parser "test6.java") ; return 115
+
+;(parser "test6.java") ; return 115 >> WTF? functionParser.scm:56:14: parser: Illegal start of top level statement
 ;(interpret "test6.java")
+
 ;(parser "test7.java") ; return true
 ;(interpret "test7.java")
 ;(parser "test8.java") ; return 20
 ;(interpret "test8.java")
 ;(parser "test9.java") ; return 24
 ;(interpret "test9.java")
-;(parser "test10.java") ; return 2
-;(interpret "test10.java")
+(parser "test10.java") ; return 2
+(interpret "test10.java")
 ;(parser "test11.java") ; return 35
 ;(interpret "test11.java")
-;(parser "test12.java") ; return error
+
+;(parser "test12.java") ; return error >> issue with actual_param_layer
 ;(interpret "test12.java")
+
 ;(parser "test13.java") ; return 90
 ;(interpret "test13.java")
+
 ;(parser "test14.java") ; return 69
 ;(interpret "test14.java")
 ;(parser "test15.java") ; return 87
@@ -544,11 +575,7 @@
 ;(interpret "test18.java")
 ;(parser "test19.java") ; return 100
 ;(interpret "test19.java")
-;(parser "test20.java") ; return 2000400
+
+;(parser "test20.java") ; return 2000400 >> ERROR: Eval Issue 
 ;(interpret "test20.java")
-;(parser "test21.java") ; return 3421
-;(interpret "test21.java")
-;(parser "test22.java") ; return 20332
-;(interpret "test22.java")
-;(parser "test23.java") ; return 21
-;(interpret "test23.java")
+
