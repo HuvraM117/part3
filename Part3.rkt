@@ -109,11 +109,16 @@
       ((exists? f_name environment) (lookup f_name environment))
       (else (error "do I have to remove a layer or not?" ) )))) ;(lookup f_name (cdr environment)))))
 
+;Helper function for outerenv
+(define outerenv
+  (lambda (statement environment)
+   ((caddr (closure (f_name statement) environment)) environment)))
+
 ; Returns the new state for the function 
 (define newstate
   (lambda (statement environment return break continue throw)
     (cons (actual_param_layer (car (closure (f_name statement) environment)) (cddr statement) environment return break continue)
-          ( (caddr (closure (f_name statement) environment)) environment))))
+          (outerenv statement environment))))
 
 ; Returns the state of function. Before it was just empty now hopefully it returns the new state with the actual parameters for the function.
 (define actual_param_layer  
