@@ -1,4 +1,5 @@
 function collatz(n) {
+
   var counteven = 0;
   var countodd = 0;
 
@@ -23,5 +24,5 @@ function collatz(n) {
 
 
 function main() {
-  return collatz(111);
+  return collatz(3);
 }

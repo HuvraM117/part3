@@ -7,7 +7,8 @@ function f(a,b) {
 }
 
 function main() {
-  f(1, 2);
-  f(3, 4);
+    f(1, 2);
+  var peter = f(3, 4);
   return count;
 }
+
