@@ -1,20 +1,14 @@
+; Interpereter Project - Part 3
+; Group 29
+; Huvra Mehta
+; Raza Agha
+; Peter Fedrizzi
 
-; If you are using racket instead of scheme, uncomment these two lines, comment the (load "simpleParser.scm") and uncomment the (require "simpleParser.scm")
-; #lang racket
-; (require "simpleParser.scm")
+;(require racket/trace)
+
 (load "functionParser.scm")
-(require racket/trace)
 
-; Huvra: W 5:42p >> Updated functionParser.scm
-; Peter: S 1:07a >> I'm back
-; Raza: M 0:51p >> There's an error but the main error is that eval-expression only evaluates arithmetic expression and it cannot do functions.
-
-; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
-;(define call/cc call-with-current-continuation)
-
-
-; The functions that start interpret-...  all return the current environment. << enviornment is referencing the "state"
-; The functions that start eval-...  all return a value
+;;;;;;;;; INTERPRET ;;;;;;;;;
 
 ; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
 (define interpret
@@ -27,12 +21,15 @@
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
+; Does not add a layer but runs the statement in order 
 (define interpret-statement-list
   (lambda (statement-list environment return break continue throw)
     (if (null? statement-list)
         environment ; return the state/enviornment
         (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw))))
         ; if the parse list is not empty then send to the main function that will sort where we need to go based on which key word we see.
+
+;;;;;;;;; Mstate ;;;;;;;;;
 
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
@@ -54,14 +51,15 @@
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
 
-;;;;;;;;;;;;;;;;;;; FUNCTION BIND ;;;;;;;;;;;;;;;;;;; Peter 1:12a
+;;;;;;;;; FUNCTION BIND ;;;;;;;;;
 
+; Declares the function name and binds it to the function closure 
 (define interpret-function
    (lambda (statement environment return break continue throw)
      (cond
        ((null? statement) (error "Mistake?"))
        ((insert (f_name statement)
-                (list (f_parameters statement) (f_body statement) (lambda (state) (lim-env statement state))) environment)))))
+                (list (f_parameters statement) (f_body statement) (lambda (state) (f_scope statement state))) environment)))))
 
 ;; Abstractions
 (define f_name ;function name 
@@ -77,30 +75,23 @@
     (cadddr statement))) 
 
 ; Establish scope of the function
-(define lim-env
+(define f_scope
   (lambda (statement enviornment)
     (cond
       ((null? enviornment) enviornment)
       ((null? (cdr enviornment)) enviornment)
       ((exists? (f_name statement) (car enviornment)) enviornment)
-      (else (lim-env statement (cdr enviornment))))))
-       
+      (else (f_scope statement (cdr enviornment))))))
                           
-;;;;;;;;;;;;;;;;;;; FUNCTION CALL ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; FUNCTION CALL ;;;;;;;;;
 
-; will be its own thing
-
-;Raza 1st April 2021 11:35. The following functions are imitated from a correctly working code so the author
-;doesn't know of how exactly they function. Giving an error at err but it might be due to other problems.
-
+; Runs the functions that are called via funcall or main (in the end)
 (define interpret-funcall
   (lambda (statement environment return break continue throw)
     (call/cc
        (lambda (return)
-         (interpret-statement-list (closure_body
-                                    (closure (f_name statement) environment))
-                                   (newstate statement environment return break continue throw)
-                                   return break continue throw)))))
+         (interpret-statement-list (closure_body (closure (f_name statement) environment)) (newstate statement environment return break continue throw) return break continue throw)))))
+
 ; Get the closure
 (define closure 
   (lambda (f_name environment)
@@ -109,49 +100,44 @@
       ((exists? f_name environment) (lookup f_name environment))
       (else (error "do I have to remove a layer or not?" ) )))) ;(lookup f_name (cdr environment)))))
 
+; Returns the new state for the function 
+(define newstate
+  (lambda (statement environment return break continue throw)
+    (cons (f_actual_parameters (car (closure (f_name statement) environment)) (cddr statement) environment return break continue throw)
+          (outerenv statement environment))))
+
 ;Helper function for outerenv
 (define outerenv
   (lambda (statement environment)
    ((caddr (closure (f_name statement) environment)) environment)))
 
-; Returns the new state for the function 
-(define newstate
-  (lambda (statement environment return break continue throw)
-    (cons (actual_param_layer (car (closure (f_name statement) environment)) (cddr statement) environment return break continue)
-          (outerenv statement environment))))
 
 ; Returns the state of function. Before it was just empty now hopefully it returns the new state with the actual parameters for the function.
-(define actual_param_layer  
-    (lambda (formal actual state return break continue)
+(define f_actual_parameters  
+    (lambda (formal actual state return break continue throw)
      (cond
      ((and (null? formal) (null? actual)) '(() ()))
      ((or (null? formal) (null? actual)) (error "Incorrect number of args."))
-     ((eq? '& (car formal)) (add-to-layer (actual_param_layer (cddr formal) (cdr actual)
-                                                                  state return break continue)
-                                          (cadr formal)
-                                          (lookup-in-env state (car actual)))) ;;;;; STATE-LOOKUP-BOX
-     (else (add-to-layer (actual_param_layer (cdr formal) (cdr actual)
-                                                 state return break continue)
-                         (car formal) (eval-expression (car actual) state return break continue null)))))) ;;;;;;;;;;;;;;;;;;;;;;;;;;; BAD NULLS
+     ((eq? '& (car formal)) (add-to-layer (f_actual_parameters (cddr formal) (cdr actual) state return break continue throw) (cadr formal) (lookup-in-env state (car actual))))
+     (else (add-to-layer (f_actual_parameters (cdr formal) (cdr actual) state return break continue throw) (car formal) (eval-expression (car actual) state return break continue throw))))))
 
 (define add-to-layer
   (lambda (layer var value)
-    (list (cons var (car layer)) (cons (box value) (cadr layer))))) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; BAD BOX
+    (list (cons var (car layer)) (cons (box value) (cadr layer))))) 
 
 ;: Abstractions
 (define closure_body
   (lambda (statement)
     (cadr statement)))
 
-
-;;;;;;;;;;;;;;;;;;; RETURN ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; RETURN ;;;;;;;;;
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
   (lambda (statement environment return break continue throw)
     (return (eval-expression (get-expr statement) environment return break continue throw))))
 
-;;;;;;;;;;;;;;;;;;; Variable Declare ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; Variable Declare ;;;;;;;;;
 
 ; Adds a new variable binding to the environment.  There may be an assignment with the variable
 (define interpret-declare
@@ -159,14 +145,14 @@
     (if (exists-declare-value? statement) (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment return break continue throw) environment)
         (insert (get-declare-var statement) 'novalue environment))))
 
-;;;;;;;;;;;;;;;;;;; Assignment ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; Assignment ;;;;;;;;;
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
   (lambda (statement environment return break continue throw)
     (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment return break continue throw) environment)))
 
-;;;;;;;;;;;;;;;;;;; If ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; If ;;;;;;;;;
 
 ; We need to check if there is an else condition.  Otherwise, we evaluate the expression and do the right thing.
 (define interpret-if
@@ -176,7 +162,7 @@
       ((exists-else? statement) (interpret-statement (get-else statement) environment return break continue throw))
       (else environment))))
 
-;;;;;;;;;;;;;;;;;;; While ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; While ;;;;;;;;;
 
 ; Interprets a while loop.  We must create break and continue continuations for this loop
 (define interpret-while
@@ -189,7 +175,7 @@
                          environment))))
          (loop (get-condition statement) (get-body statement) environment))))))
 
-;;;;;;;;;;;;;;;;;;; Block/Begin ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; Block/Begin ;;;;;;;;;
 
 ; Interprets a block.  The break, continue, and throw continuations must be adjusted to pop the environment
 (define interpret-block
@@ -201,7 +187,7 @@
                                          (lambda (env) (continue (pop-frame env)))
                                          (lambda (v env) (throw v (pop-frame env)))))))
 
-;;;;;;;;;;;;;;;;;;; Throw & Try-Catch-Finally ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; Throw & Try-Catch-Finally ;;;;;;;;;
 
 ; We use a continuation to throw the proper value. Because we are not using boxes, the environment/state must be thrown as well so any environment changes will be kept
 (define interpret-throw
@@ -256,7 +242,7 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
-;;;;;;;;;;;;;;;;;;; M_expression Broken Into Two ;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; M_expression ;;;;;;;;;
 
 ; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
 (define eval-expression
@@ -265,7 +251,7 @@
       
       ((number? expr) expr)
       ((eq? expr 'true) #t)
-      ((eq? expr 'false) #f) ;;
+      ((eq? expr 'false) #f)
       ((and (list? expr) (eq? 'funcall (operator expr))) (interpret-funcall expr environment return break continue throw))
       ((not (list? expr)) (lookup expr environment))
       (else (eval-operator expr environment return break continue throw)))))
@@ -390,17 +376,21 @@
   (lambda (S)
     (cond
       ((null? S) #t)
-      ((not (null? (car S))) #f)
-      ((and (null? (car S)) (null? (cdr S))) #t)
-      (else (state_empty (cdr S))))))
+      ((not (null? (firstlayer S))) #f)
+      ((and (null? (firstlayer S)) (null? (restlayer S))) #t)
+      (else (state_empty (restlayer S))))))
 
 (define if_variable_there
   (lambda (var S)
     (cond
       ((null? S) #f)
-      ((null? (car S)) #f)
-      ((eq? (car S) var) #t)
-      (else (if_variable_there var (cdr S) )))))
+      ((null? (firstlayer S)) #f)
+      ((eq? (firstlayer S) var) #t)
+      (else (if_variable_there var (restlayer S) )))))
+
+; Abstractions
+(define firstlayer (lambda (statement) (car statement)))
+(define restlayer (lambda (statement) (cdr statement)))
 
 
 ; does a variable exist in a list?
@@ -457,9 +447,9 @@
 ; Adds a new variable/value binding pair into the environment.  Gives an error if the variable already exists in this frame.
 (define insert
   (lambda (var val environment)
-    (if (exists-in-list? var (variables (car environment)))
+    (if (exists-in-list? var (variables (firstlayer environment)))
         (myerror "error: variable is being re-declared:" var)
-        (cons (add-to-frame var val (car environment)) (cdr environment)))))
+        (cons (add-to-frame var val (firstlayer environment)) (restlayer environment)))))
 
 ; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
 (define update
@@ -533,7 +523,7 @@
 
 
 ;(parser "basic.java") 
-;(interpret "basic.java")
+(interpret "basic.java")
 ;(parser "test1.java") ; return 10 
 (interpret "test1.java")
 ;(parser "test2.java") ; return 14
@@ -563,19 +553,9 @@
 ;(parser "test18.java") ; return 125
 (interpret "test18.java")
 
-
-
-;(trace interpret-statement)
-;(trace closure)
-;(trace lookup)
-;(trace update)
-(trace interpret-assign)
-;(trace update-existing)
-;(trace exists-in-list?)
-
 ; BAD
 ;(parser "test14.java") ; return 69 >> 0
-(interpret "test14.java")
+;(interpret "test14.java")
 ;(parser "test15.java") ; return 87 >> -13
 ;(interpret "test15.java")
 ;(parser "test10.java") ; return 2 >> 3
@@ -585,7 +565,7 @@
 ;(parser "test16.java") ; return 64 >> error: cdr: contract violation expected: pair? given ()
 ;(interpret "test16.java")
 
-;(parser "test19.java") ; return 100 >> error: car: contract violation expected: pair? given: ()
+;(parser "test19.java") ; return 100 >> Error: variable not in scope - x
 ;(interpret "test19.java")
 ;(parser "test20.java") ; return 2000400 >> error: undefined variable x
 ;(interpret "test20.java")
