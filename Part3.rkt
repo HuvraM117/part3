@@ -476,6 +476,7 @@
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
   (lambda (var val environment)
+    (if (null? environment) (myerror "Error: variable not in scope -" var ))
     (if (exists-in-list? var (variables (car environment)))
         (cons (update-in-frame var val (topframe environment)) (remainingframes environment))
         (cons (topframe environment) (update-existing var val (remainingframes environment))))))
@@ -557,23 +558,33 @@
 ;(interpret "test12.java")
 ;(parser "test13.java") ; return 90
 (interpret "test13.java")
+;(parser "test17.java") ; return error >> Error: variable not in scope
+;(interpret "test17.java")
 ;(parser "test18.java") ; return 125
 (interpret "test18.java")
 
 
 
+;(trace interpret-statement)
+;(trace closure)
+;(trace lookup)
+;(trace update)
+(trace interpret-assign)
+;(trace update-existing)
+;(trace exists-in-list?)
+
 ; BAD
 ;(parser "test14.java") ; return 69 >> 0
 (interpret "test14.java")
 ;(parser "test15.java") ; return 87 >> -13
-(interpret "test15.java")
+;(interpret "test15.java")
 ;(parser "test10.java") ; return 2 >> 3
-(interpret "test10.java")
+;(interpret "test10.java")
+
 
 ;(parser "test16.java") ; return 64 >> error: cdr: contract violation expected: pair? given ()
 ;(interpret "test16.java")
-;(parser "test17.java") ; return error >> error: car: contract violation expected: pair? given: ()
-;(interpret "test17.java")
+
 ;(parser "test19.java") ; return 100 >> error: car: contract violation expected: pair? given: ()
 ;(interpret "test19.java")
 ;(parser "test20.java") ; return 2000400 >> error: undefined variable x
