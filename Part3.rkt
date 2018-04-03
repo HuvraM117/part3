@@ -127,11 +127,11 @@
                                           (lookup-in-env state (car actual)))) ;;;;; STATE-LOOKUP-BOX
      (else (add-to-layer (actual_param_layer (cdr formal) (cdr actual)
                                                  state return break continue)
-                         (car formal) (eval-expression (car actual) state return break continue null))))))
+                         (car formal) (eval-expression (car actual) state return break continue null)))))) ;;;;;;;;;;;;;;;;;;;;;;;;;;; BAD NULLS
 
 (define add-to-layer
   (lambda (layer var value)
-    (list (cons var (car layer)) (cons value (cadr layer)))))
+    (list (cons var (car layer)) (cons (box value) (cadr layer))))) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; BAD BOX
 
 ;: Abstractions
 (define closure_body
@@ -179,7 +179,7 @@
     (call/cc
      (lambda (break)
        (letrec ((loop (lambda (condition body environment)
-                        (if (eval-expression condition environment return null null throw)
+                        (if (eval-expression condition environment return null null throw) ;;;;;;;;;;;;;;;;;;; BAD NULLS
                             (loop condition body (interpret-statement body environment return break (lambda (env) (break (loop condition body env))) throw))
                          environment))))
          (loop (get-condition statement) (get-body statement) environment))))))
@@ -446,7 +446,7 @@
 (define get-value
   (lambda (n l)
     (cond
-      ((zero? n) (car l))
+      ((zero? n) (unbox (car l)))
       (else (get-value (- n 1) (cdr l))))))
 
 ; Adds a new variable/value binding pair into the environment.  Gives an error if the variable already exists in this frame.
@@ -466,7 +466,7 @@
 ; Add a new variable/value pair to the frame.
 (define add-to-frame
   (lambda (var val frame)
-    (list (cons var (variables frame)) (cons (scheme->language val) (store frame)))))
+    (list (cons var (variables frame)) (cons (box (scheme->language val)) (store frame))))) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; BAD BOX
 
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
@@ -484,7 +484,7 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist)) (cons (scheme->language val) (cdr vallist)))
+      ((eq? var (car varlist)) (cons (box (scheme->language val)) (cdr vallist))) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; BAD BOX
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
 ; Returns the list of variables from a frame
@@ -529,53 +529,48 @@
 ;(parser "basic.java") 
 ;(interpret "basic.java")
 ;(parser "test1.java") ; return 10 
-;(interpret "test1.java")
+(interpret "test1.java")
 ;(parser "test2.java") ; return 14
-;(interpret "test2.java")
+(interpret "test2.java")
 ;(parser "test3.java") ; return 45
-;(interpret "test3.java")
+(interpret "test3.java")
 ;(parser "test4.java") ; return 55
-;(interpret "test4.java")
+(interpret "test4.java")
 ;(parser "test5.java") ; return 1
-;(interpret "test5.java")
+(interpret "test5.java")
 ;(parser "test6.java") ; return 115 
-;(interpret "test6.java")
+(interpret "test6.java")
 ;(parser "test7.java") ; return true
-;(interpret "test7.java")
+(interpret "test7.java")
 ;(parser "test8.java") ; return 20
-;(interpret "test8.java")
+(interpret "test8.java")
 ;(parser "test9.java") ; return 24
-;(interpret "test9.java")
+(interpret "test9.java")
 ;(parser "test11.java") ; return 35
-;(interpret "test11.java")
+(interpret "test11.java")
 ;(parser "test12.java") ; return error "Incorrect number of args."
 ;(interpret "test12.java")
 ;(parser "test13.java") ; return 90
-;(interpret "test13.java")
+(interpret "test13.java")
+;(parser "test18.java") ; return 125
+(interpret "test18.java")
 
 
 
-; DON'T WORK?!
-;(parser "test10.java") ; return 2 >> 3 error
-;(interpret "test10.java")
+; BAD
+;(parser "test14.java") ; return 69 >> 0
+(interpret "test14.java")
+;(parser "test15.java") ; return 87 >> -13
+(interpret "test15.java")
+;(parser "test10.java") ; return 2 >> 3
+(interpret "test10.java")
 
-
-
-; BOXES
-;(parser "test14.java") ; return 69
-;(interpret "test14.java")
-
-;(parser "test15.java") ; return 87 >> error: car: contract violation expected: pair? given: ()
-;(interpret "test15.java")
-;(parser "test16.java") ; return 64 >> error: car: contract violation expected: pair? given: ()
+;(parser "test16.java") ; return 64 >> error: cdr: contract violation expected: pair? given ()
 ;(interpret "test16.java")
 ;(parser "test17.java") ; return error >> error: car: contract violation expected: pair? given: ()
 ;(interpret "test17.java")
-;(parser "test18.java") ; return 125 >> error: car: contract violation expected: pair? given: ()
-;(interpret "test18.java")
 ;(parser "test19.java") ; return 100 >> error: car: contract violation expected: pair? given: ()
 ;(interpret "test19.java")
-
 ;(parser "test20.java") ; return 2000400 >> error: undefined variable x
 ;(interpret "test20.java")
 
