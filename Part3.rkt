@@ -4,7 +4,7 @@
 ; Raza Agha
 ; Peter Fedrizzi
 
-(require racket/trace)
+(load racket/trace)
 
 (load "classParser.scm")
 

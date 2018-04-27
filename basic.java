@@ -1,6 +1,6 @@
-var z = 5;
-function main () {
-  var x = 4;
-  var y = 6 + x;
-  return x + y;
+class B {
+  static function main() {
+    var b = new B();
+    return b;
+  }
 }
