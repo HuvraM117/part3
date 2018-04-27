@@ -4,9 +4,11 @@
 ; Raza Agha
 ; Peter Fedrizzi
 
-(load racket/trace)
+#lang racket
+(require "classParser.scm")
 
-(load "classParser.scm")
+(parser "basic.java")
+;(interpret "basic.java" "B")
 
 ;;;;;;;;; INTERPRET ;;;;;;;;;
 
@@ -96,7 +98,7 @@
 (define closure 
   (lambda (f_name environment)
     (cond
-      ((null? environment) (error "Error: Attempted to call a function that has not been initialized in scope." fun-name))
+      ((null? environment) (error "Error: Attempted to call a function that has not been initialized in scope." f_name))
       ((exists? f_name environment) (lookup f_name environment))
       (else (error "do I have to remove a layer or not?" ) )))) ;(lookup f_name (cdr environment)))))
 
@@ -466,10 +468,11 @@
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
   (lambda (var val environment)
-    (if (null? environment) (myerror "Error: variable not in scope -" var ))
-    (if (exists-in-list? var (variables (car environment)))
+    (cond
+    ((null? environment) (myerror "Error: variable not in scope -" var ))
+    (else (exists-in-list? var (variables (car environment)))
         (cons (update-in-frame var val (topframe environment)) (remainingframes environment))
-        (cons (topframe environment) (update-existing var val (remainingframes environment))))))
+        (cons (topframe environment) (update-existing var val (remainingframes environment)))))))
 
 ; Changes the binding of a variable in the frame to a new value.
 (define update-in-frame
@@ -520,53 +523,4 @@
                             str
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
-
-
-;(parser "basic.java") 
-(interpret "basic.java")
-;(parser "test1.java") ; return 10 
-(interpret "test1.java")
-;(parser "test2.java") ; return 14
-(interpret "test2.java")
-;(parser "test3.java") ; return 45
-(interpret "test3.java")
-;(parser "test4.java") ; return 55
-(interpret "test4.java")
-;(parser "test5.java") ; return 1
-(interpret "test5.java")
-;(parser "test6.java") ; return 115 
-(interpret "test6.java")
-;(parser "test7.java") ; return true
-(interpret "test7.java")
-;(parser "test8.java") ; return 20
-(interpret "test8.java")
-;(parser "test9.java") ; return 24
-(interpret "test9.java")
-;(parser "test11.java") ; return 35
-(interpret "test11.java")
-;(parser "test12.java") ; return error "Incorrect number of args."
-;(interpret "test12.java")
-;(parser "test13.java") ; return 90
-(interpret "test13.java")
-;(parser "test17.java") ; return error >> Error: variable not in scope
-;(interpret "test17.java")
-;(parser "test18.java") ; return 125
-(interpret "test18.java")
-
-; BAD
-;(parser "test14.java") ; return 69 >> 0
-;(interpret "test14.java")
-;(parser "test15.java") ; return 87 >> -13
-;(interpret "test15.java")
-;(parser "test10.java") ; return 2 >> 3
-;(interpret "test10.java")
-
-
-;(parser "test16.java") ; return 64 >> error: cdr: contract violation expected: pair? given ()
-;(interpret "test16.java")
-
-;(parser "test19.java") ; return 100 >> Error: variable not in scope - x
-;(interpret "test19.java")
-;(parser "test20.java") ; return 2000400 >> error: undefined variable x
-;(interpret "test20.java")
 
