@@ -1,12 +1,12 @@
-; Interpereter Project - Part 3
+; Interpereter Project - Part 4
 ; Group 29
 ; Huvra Mehta
 ; Raza Agha
 ; Peter Fedrizzi
 
-;(require racket/trace)
+(require racket/trace)
 
-(load "functionParser.scm")
+(load "classParser.scm")
 
 ;;;;;;;;; INTERPRET ;;;;;;;;;
 
