@@ -1,24 +1,26 @@
-var x;
-
-function f(a,b) {
-  return a * 100 + b;
+class A {
+    var x = 10;
+    var y = 20;
+    
+    function add(a, b) {
+        return a + b;
+    }
+    
+    function add(a,b,c) {
+        return a + b + c;
+    }
 }
 
-function fib(f) {
-  var last = 0;
-  var last1 = 1;
-
-  while (f > 0) {
-    f = f - 1;
-    var temp = last1 + last;
-    last = last1;
-    last1 = temp;
-  }
-  return last;
-}
-
-function main() {
-  var y;
-  var z = f(x = fib(3), y = fib(4));
-  return z * 100 + y * 10 + x;
+class B extends A {
+    var x = 2;
+    var y = 30;
+    
+    function add(a,b) {
+        return a*b;
+    }
+    
+    static function main() {
+        var b = new B();
+        return b.add(b.x,b.y) + b.add(b.x,b.x,b.x);
+    }
 }

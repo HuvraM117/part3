@@ -1,20 +1,23 @@
-function gcd(a, &b) {
-  if (a < b) {
-    var temp = a;
-    a = b;
-    b = temp;
-  }
-  var r = a % b;
-  while (r != 0) {
-    a = b;
-    b = r;
-    r = a % b;
-  }
-  return b;
-}
-function main () {
-  var x = 14;
-  var y = 3 * x - 7;
-  gcd(x,y);
-  return x+y;
+class A {
+    var x = 5;
+    
+    function swap(& a, & b) {
+        var temp = a;
+        a = b;
+        b = temp;
+    }
+    
+    static function main() {
+        var y = 10;
+        var sum = 0;
+        var a = new A();
+        
+        a.swap(a.x, y);
+        sum = a.x * 100 + y;
+        a.x = 1;
+        y = 2;
+        a.swap(a.x, y);
+        sum = sum + a.x * 10 + y;
+        return sum;
+    }
 }

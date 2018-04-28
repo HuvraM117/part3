@@ -8,6 +8,11 @@ class Rectangle extends Shape {
     var height;
     var width;
     
+    Rectangle(h, w) {
+        this.height = h;
+        this.width = w;
+    }
+    
     function setHeight(h) {
         height = h;
     }
@@ -30,6 +35,10 @@ class Rectangle extends Shape {
 }
 
 class Square extends Rectangle {
+    Square(size) {
+        super(size, size);
+    }
+    
     function setSize(size) {
         super.setWidth(size);
     }
@@ -43,9 +52,8 @@ class Square extends Rectangle {
     }
     
     static function main() {
-        var s = new Square();
+        var s = new Square(20);
         var sum = 0;
-        s.setSize(10);
         sum = sum + s.area();
         s.setHeight(4);
         sum = sum + s.area();

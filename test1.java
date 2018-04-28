@@ -1,14 +1,9 @@
-function main() {
-  var x = 10;
-  var y = 20;
-  var z = 30;
-  var min = 0;
-
-  if (x < y)
-    min = x;
-  else
-    min = y;
-  if (min > z)
-    min = z;
-  return min;
+class A {
+    var x = 5;
+    var y = 10;
+    
+    static function main() {
+        var a = new A();
+        return a.x + a.y;
+    }
 }
