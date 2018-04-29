@@ -7,29 +7,30 @@
 #lang racket
 (require "classParser.scm")
 
-(parser "basic.java")
-;(interpret "basic.java" "B")
+(require racket/trace)
 
 ;;;;;;;;; INTERPRET ;;;;;;;;;
 
 ; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
 (define interpret
-  (lambda (file)
+  (lambda (file class)
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (append (parser file) '((return (funcall main)))) (newenvironment) return
+        (interpret-statement-list (append (parser file) '((return (funcall main)))) (newenvironment) (string->symbol class) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
+
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 ; Does not add a layer but runs the statement in order 
 (define interpret-statement-list
-  (lambda (statement-list environment return break continue throw)
+  (lambda (statement-list environment class return break continue throw)
     (if (null? statement-list)
-        environment ; return the state/enviornment
-        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw))))
+        environment ; return the class
+        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) class return break continue throw))))
         ; if the parse list is not empty then send to the main function that will sort where we need to go based on which key word we see.
+
 
 ;;;;;;;;; Mstate ;;;;;;;;;
 
@@ -47,11 +48,40 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw)) ; begin << creates a new layer in the enviornment
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment return break continue throw)) ; throw
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw)) ; try-catch-finally
-      ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
 
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
       ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw)); ??? reuturn break continue throw)); call or runs the functions from bindings
+
+      ((eq? (statement-type statement) 'class) (create-class statement environment return break continue throw)) ;create a class closure
+      ((eq? (statement-type statement) 'static-function) (interpret-static-function statement environment return break continue throw)) ;runs static functions 
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
+;;;;;;;; CLASS BIND ;;;;;;;;;;;
+
+(define create-class
+  (lambda (statement environment return break continue throw)
+    (cond
+      ((null? statement) (myerror "No class closure"))
+      (else (insert (c_name statement) (list  (c_instances statement) (c_methods statement)) environment)))))
+
+(define c_name
+  (lambda (statement)
+    (cadr statement)))
+
+(define c_instances
+  (lambda (statement)
+    (caddr statement)))
+
+(define c_methods
+  (lambda (statement)
+    (cadddr statement)))
+
+
+;;;;;;;;; EVALUATE MAIN ;;;;;;;;;
+
+;somehow need to fix the main issue?!
+
+
 
 ;;;;;;;;; FUNCTION BIND ;;;;;;;;;
 
@@ -62,6 +92,13 @@
        ((null? statement) (error "Mistake?"))
        ((insert (f_name statement)
                 (list (f_parameters statement) (f_body statement) (lambda (state) (f_scope statement state))) environment)))))
+
+(define interpret-static-function
+  (lambda (statement environment return break continue throw)
+    (cond
+      ((null? statement) (error "Mistake?"))
+      ((null? (f_body statement)) environment) ;checks if the function body is empty
+      (else (insert (f_name statement) (f_body statement) environment))))) ;checks if there are any parameters
 
 ;; Abstractions
 (define f_name ;function name 
@@ -524,3 +561,11 @@
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
 
+(trace interpret-statement)
+(trace interpret-funcall)
+(trace interpret-statement-list)
+(trace create-class)
+    
+
+(parser "basic.java")
+(interpret "basic.java" "B")
