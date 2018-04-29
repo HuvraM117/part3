@@ -26,8 +26,7 @@
 ; Does not add a layer but runs the statement in order 
 (define interpret-statement-list
   (lambda (statement-list environment class return break continue throw)
-    (if (null? statement-list)
-        environment ; return the class
+    (if (null? statement-list) environment
         (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) class return break continue throw))))
         ; if the parse list is not empty then send to the main function that will sort where we need to go based on which key word we see.
 
@@ -53,7 +52,9 @@
       ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw)); ??? reuturn break continue throw)); call or runs the functions from bindings
 
       ((eq? (statement-type statement) 'class) (create-class statement environment return break continue throw)) ;create a class closure
-      ((eq? (statement-type statement) 'static-function) (interpret-static-function statement environment return break continue throw)) ;runs static functions 
+      ((eq? (statement-type statement) 'static-function) (interpret-static-function statement environment return break continue throw)) ;runs static functions
+      ;((eq? 'new (statement-type statement)) (interpret-new-object statment environment return break continue throw))
+      ;((eq? 'dot (statement-type statement)) (interpret-dot statement environment return break continue throw))
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
 ;;;;;;;; CLASS BIND ;;;;;;;;;;;
@@ -62,7 +63,7 @@
   (lambda (statement environment return break continue throw)
     (cond
       ((null? statement) (myerror "No class closure"))
-      (else (insert (c_name statement) (list  (c_instances statement) (c_methods statement)) environment)))))
+      (else (insert (c_name statement) (list  (c_instances statement) (interpret-statement (car (c_methods statement)) environment return break continue throw)) environment)))))
 
 (define c_name
   (lambda (statement)
@@ -75,12 +76,6 @@
 (define c_methods
   (lambda (statement)
     (cadddr statement)))
-
-
-;;;;;;;;; EVALUATE MAIN ;;;;;;;;;
-
-;somehow need to fix the main issue?!
-
 
 
 ;;;;;;;;; FUNCTION BIND ;;;;;;;;;
@@ -121,6 +116,7 @@
       ((null? (cdr enviornment)) enviornment)
       ((exists? (f_name statement) (car enviornment)) enviornment)
       (else (f_scope statement (cdr enviornment))))))
+
                           
 ;;;;;;;;; FUNCTION CALL ;;;;;;;;;
 
@@ -168,6 +164,10 @@
 (define closure_body
   (lambda (statement)
     (cadr statement)))
+
+;;;;;;;;; EVALUATE MAIN ;;;;;;;;;
+
+;need to evaluate main?!
 
 ;;;;;;;;; RETURN ;;;;;;;;;
 
@@ -565,6 +565,9 @@
 (trace interpret-funcall)
 (trace interpret-statement-list)
 (trace create-class)
+(trace interpret-funcall)
+(trace closure)
+(trace interpret-return)
     
 
 (parser "basic.java")
