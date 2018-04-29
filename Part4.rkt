@@ -17,7 +17,7 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (append (parser file) '((return (funcall main)))) (newenvironment) (string->symbol class) return
+        (interpret-statement-list (append (parser file) '((return (static-funcall main)))) (newenvironment) (string->symbol class) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
@@ -26,7 +26,8 @@
 ; Does not add a layer but runs the statement in order 
 (define interpret-statement-list
   (lambda (statement-list environment class return break continue throw)
-    (if (null? statement-list) environment
+    (if (null? statement-list)
+        (interpret-main statement-list environment return break continue throw)
         (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) class return break continue throw))))
         ; if the parse list is not empty then send to the main function that will sort where we need to go based on which key word we see.
 
@@ -52,18 +53,26 @@
       ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw)); ??? reuturn break continue throw)); call or runs the functions from bindings
 
       ((eq? (statement-type statement) 'class) (create-class statement environment return break continue throw)) ;create a class closure
-      ((eq? (statement-type statement) 'static-function) (interpret-static-function statement environment return break continue throw)) ;runs static functions
-      ;((eq? 'new (statement-type statement)) (interpret-new-object statment environment return break continue throw))
+      ((eq? (statement-type statement) 'static-function) (interpret-function statement environment return break continue throw)) ;runs static functions
+      ((eq? (statement-type statement) 'static-funcall) (interpret-main statement environment return break continue throw))
+      ((eq? (statement-type statement) 'new ) (interpret-new-object statement environment return break continue throw))
+
+      ;((eq? (statement-type statement) 'static-var) (interpret-static-funcall statement environment return break continue throw))
       ;((eq? 'dot (statement-type statement)) (interpret-dot statement environment return break continue throw))
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
+           
 ;;;;;;;; CLASS BIND ;;;;;;;;;;;
 
 (define create-class
   (lambda (statement environment return break continue throw)
     (cond
       ((null? statement) (myerror "No class closure"))
-      (else (insert (c_name statement) (list  (c_instances statement) (interpret-statement (car (c_methods statement)) environment return break continue throw)) environment)))))
+      ((null? (c_instances statement)) (insert (c_name statement) (cons  (c_instances statement) (interpret-statement (car (c_methods statement)) environment return break continue throw)) environment))
+      (else (insert (c_name statement)
+                    (cons  (interpret-statement (c_instances statement) environment return break continue throw)
+                           (interpret-statement (car (c_methods statement)) environment return break continue throw))
+                    environment)))))
 
 (define c_name
   (lambda (statement)
@@ -87,13 +96,6 @@
        ((null? statement) (error "Mistake?"))
        ((insert (f_name statement)
                 (list (f_parameters statement) (f_body statement) (lambda (state) (f_scope statement state))) environment)))))
-
-(define interpret-static-function
-  (lambda (statement environment return break continue throw)
-    (cond
-      ((null? statement) (error "Mistake?"))
-      ((null? (f_body statement)) environment) ;checks if the function body is empty
-      (else (insert (f_name statement) (f_body statement) environment))))) ;checks if there are any parameters
 
 ;; Abstractions
 (define f_name ;function name 
@@ -138,7 +140,7 @@
 ; Returns the new state for the function 
 (define newstate
   (lambda (statement environment return break continue throw)
-    (cons (f_actual_parameters (car (closure (f_name statement) environment)) (cddr statement) environment return break continue throw)
+    (cons (f_actual_parameters (car (closure (f_name statement) (function-env environment))) (cddr statement) environment return break continue throw)
           (outerenv statement environment))))
 
 ;Helper function for outerenv
@@ -167,7 +169,30 @@
 
 ;;;;;;;;; EVALUATE MAIN ;;;;;;;;;
 
-;need to evaluate main?!
+(define interpret-main
+  (lambda (statement environment return break continue throw)
+    (call/cc
+       (lambda (return)
+         (interpret-statement-list (closure_body (closure (f_name statement) (function-env environment))) ;(newstate statement environment return break continue throw)
+                                   environment (class_name environment) return break continue throw)))))
+
+(define function-env
+  (lambda (environment)
+    (cdr (unbox (caadar environment)))))
+
+(define class_name
+  (lambda (environment)
+    (car (car (car environment)))))
+
+;;;;;;;;; NEW ;;;;;;;;;
+
+(define interpret-new-object
+  (lambda (statement environment return break continue throw)
+    (call/cc
+       (lambda (return)
+         (interpret-statement-list (closure_body (closure (f_name statement) (function-env environment))) ;(newstate statement environment return break continue throw)
+                                   environment (class_name environment) return break continue throw)))))
+                        
 
 ;;;;;;;;; RETURN ;;;;;;;;;
 
@@ -291,8 +316,10 @@
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
+      ((and (list? expr) (eq? 'static-funcall (operator expr))) (interpret-main expr environment return break continue throw))
       ((and (list? expr) (eq? 'funcall (operator expr))) (interpret-funcall expr environment return break continue throw))
       ((not (list? expr)) (lookup expr environment))
+      ((eq? (statement-type expr) 'new ) (interpret-new-object expr environment return break continue throw))
       (else (eval-operator expr environment return break continue throw)))))
 
 ; Evaluate a binary (or unary) operator.  Although this is not dealing with side effects, I have the routine evaluate the left operand first and then
@@ -417,7 +444,7 @@
       ((null? S) #t)
       ((not (null? (firstlayer S))) #f)
       ((and (null? (firstlayer S)) (null? (restlayer S))) #t)
-      (else (state_empty (restlayer S))))))
+      (else (state_empty (restlayer S)))))) 
 
 (define if_variable_there
   (lambda (var S)
@@ -453,6 +480,7 @@
           (myerror "error: variable without an assigned value:" var)
           value))))
 
+;TO DO: EDIT THIS?! OR MAKE A COPY 
 ; Return the value bound to a variable in the environment
 (define lookup-in-env
   (lambda (var environment)
@@ -561,14 +589,11 @@
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
 
-(trace interpret-statement)
-(trace interpret-funcall)
-(trace interpret-statement-list)
-(trace create-class)
-(trace interpret-funcall)
+(trace interpret-main)
+(trace interpret-declare)
 (trace closure)
-(trace interpret-return)
     
-
+;(parser "test4.java")
+;(interpret "test4.java" "List")
 (parser "basic.java")
 (interpret "basic.java" "B")
