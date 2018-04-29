@@ -182,18 +182,20 @@
 
 (define class_name
   (lambda (environment)
-    (car (car (car environment)))))
+    (car (car (car environment))))) 
 
 ;;;;;;;;; NEW ;;;;;;;;;
 
+
+; MIGHT BE DOING THIS WRONG?!?!?!
+
 (define interpret-new-object
   (lambda (statement environment return break continue throw)
-    (call/cc
-       (lambda (return)
-         (interpret-statement-list (closure_body (closure (f_name statement) (function-env environment))) ;(newstate statement environment return break continue throw)
-                                   environment (class_name environment) return break continue throw)))))
-                        
+    (cond
+      ((state_empty environment) '())
+      (lookup-in-env (class_name environment) environment))))
 
+                   
 ;;;;;;;;; RETURN ;;;;;;;;;
 
 ; Calls the return continuation with the given expression value
@@ -480,7 +482,6 @@
           (myerror "error: variable without an assigned value:" var)
           value))))
 
-;TO DO: EDIT THIS?! OR MAKE A COPY 
 ; Return the value bound to a variable in the environment
 (define lookup-in-env
   (lambda (var environment)
@@ -592,6 +593,8 @@
 (trace interpret-main)
 (trace interpret-declare)
 (trace closure)
+(trace lookup)
+(trace interpret-new-object)
     
 ;(parser "test4.java")
 ;(interpret "test4.java" "List")
