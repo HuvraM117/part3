@@ -28,7 +28,7 @@
   (lambda (statement-list environment class return break continue throw)
     (if (null? statement-list)
         (interpret-main statement-list environment return break continue throw)
-        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) class return break continue throw))))
+        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment class return break continue throw) class return break continue throw))))
         ; if the parse list is not empty then send to the main function that will sort where we need to go based on which key word we see.
 
 
@@ -36,7 +36,7 @@
 
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment class return break continue throw)
     (cond
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return break continue throw)) ; return
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment return break continue throw)) ; variable creation
@@ -52,7 +52,7 @@
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
       ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw)); ??? reuturn break continue throw)); call or runs the functions from bindings
 
-      ((eq? (statement-type statement) 'class) (create-class statement environment return break continue throw)) ;create a class closure
+      ((eq? (statement-type statement) 'class) (create-class statement environment class return break continue throw)) ;create a class closure
       ((eq? (statement-type statement) 'static-function) (interpret-function statement environment return break continue throw)) ;runs static functions
       ((eq? (statement-type statement) 'static-funcall) (interpret-main statement environment return break continue throw))
       ((eq? (statement-type statement) 'new ) (interpret-new-object statement environment return break continue throw))
@@ -65,13 +65,13 @@
 ;;;;;;;; CLASS BIND ;;;;;;;;;;;
 
 (define create-class
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment class return break continue throw)
     (cond
       ((null? statement) (myerror "No class closure"))
-      ((null? (c_instances statement)) (insert (c_name statement) (cons  (c_instances statement) (interpret-statement (car (c_methods statement)) environment return break continue throw)) environment))
+      ((null? (c_instances statement)) (insert (c_name statement) (cons  (c_instances statement) (interpret-statement (car (c_methods statement)) environment class return break continue throw)) environment))
       (else (insert (c_name statement)
-                    (cons  (interpret-statement (c_instances statement) environment return break continue throw)
-                           (interpret-statement (car (c_methods statement)) environment return break continue throw))
+                    (cons  (interpret-statement (c_instances statement) environment class return break continue throw)
+                           (interpret-statement (car (c_methods statement)) environment class return break continue throw))
                     environment)))))
 
 (define c_name
@@ -127,7 +127,7 @@
   (lambda (statement environment return break continue throw)
     (call/cc
        (lambda (return)
-         (interpret-statement-list (closure_body (closure (f_name statement) environment)) (newstate statement environment return break continue throw) return break continue throw)))))
+         (interpret-statement-list (closure_body (closure (f_name statement) environment)) (newstate statement environment return break continue throw) class return break continue throw)))))
 
 ; Get the closure
 (define closure 
@@ -170,19 +170,15 @@
 ;;;;;;;;; EVALUATE MAIN ;;;;;;;;;
 
 (define interpret-main
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment class return break continue throw)
     (call/cc
        (lambda (return)
          (interpret-statement-list (closure_body (closure (f_name statement) (function-env environment))) ;(newstate statement environment return break continue throw)
-                                   environment (class_name environment) return break continue throw)))))
+                                   environment class return break continue throw)))))
 
 (define function-env
   (lambda (environment)
     (cdr (unbox (caadar environment)))))
-
-(define class_name
-  (lambda (environment)
-    (car (car (car environment))))) 
 
 ;;;;;;;;; NEW ;;;;;;;;;
 
@@ -190,10 +186,10 @@
 ; MIGHT BE DOING THIS WRONG?!?!?!
 
 (define interpret-new-object
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment class return break continue throw)
     (cond
       ((state_empty environment) '())
-      (lookup-in-env (class_name environment) environment))))
+      (lookup-in-env class environment))))
 
                    
 ;;;;;;;;; RETURN ;;;;;;;;;
@@ -224,7 +220,7 @@
 (define interpret-if
   (lambda (statement environment return break continue throw)
     (cond
-      ((eval-expression (get-condition statement) environment return break continue throw) (interpret-statement (get-then statement) environment return break continue throw))
+      ((eval-expression (get-condition statement) environment return break continue throw) (interpret-statement (get-then statement) environment class return break continue throw))
       ((exists-else? statement) (interpret-statement (get-else statement) environment return break continue throw))
       (else environment))))
 
@@ -237,7 +233,7 @@
      (lambda (break)
        (letrec ((loop (lambda (condition body environment)
                         (if (eval-expression condition environment return null null throw) ;;;;;;;;;;;;;;;;;;; BAD NULLS
-                            (loop condition body (interpret-statement body environment return break (lambda (env) (break (loop condition body env))) throw))
+                            (loop condition body (interpret-statement body environment class return break (lambda (env) (break (loop condition body env))) throw))
                          environment))))
          (loop (get-condition statement) (get-body statement) environment))))))
 
@@ -245,9 +241,10 @@
 
 ; Interprets a block.  The break, continue, and throw continuations must be adjusted to pop the environment
 (define interpret-block
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment class return break continue throw)
     (pop-frame (interpret-statement-list (cdr statement)
                                          (push-frame environment)
+                                         class
                                          return
                                          (lambda (env) (break (pop-frame env)))
                                          (lambda (env) (continue (pop-frame env)))
@@ -596,7 +593,7 @@
 (trace lookup)
 (trace interpret-new-object)
     
-;(parser "test4.java")
-;(interpret "test4.java" "List")
-(parser "basic.java")
-(interpret "basic.java" "B")
+;(parser "test1.java")
+;(interpret "test1.java" "List")
+;(parser "basic.java")
+;(interpret "basic.java" "B")
