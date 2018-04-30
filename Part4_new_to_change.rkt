@@ -65,9 +65,9 @@
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
      ;((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw)); ??? reuturn break continue throw)); call or runs the functions from bindings
 
-      ; please change maybe not even correct
+      ; please change
 
-       ((eq? 'funcall (statement-type statement)) (interpret-funcall-result-environment (cdr (lookup (car (cdr statement)) environment)) (f_actual_parameters (car (lookup (car (cdr statement)) environment)) (cdr (cdr statement)) (push-frame environment) throw)
+     ((eq? 'funcall (statement-type statement)) (interpret-funcall-result-environment (cadr (lookup (car (cdr statement)) environment)) (add-parameters-to-environment (car (lookup (car (cdr statement)) environment)) (cdr (cdr statement)) (push-frame environment) throw)
                                                                                        return
                                                                                        break continue throw))
 
@@ -77,6 +77,8 @@
       ((eq? (statement-type statement) 'class) (create-class (cdr statement) environment return break continue throw)) ;create a class closure
 
       ((eq? (statement-type statement) 'static-function) (interpret-function statement environment return break continue throw)) ;runs static functions
+
+      
       ((eq? (statement-type statement) 'static-funcall) (interpret-main statement environment return break continue throw))
       ((eq? (statement-type statement) 'new ) (interpret-new-object statement environment return break continue throw))
 
@@ -90,6 +92,8 @@
     (cond
       ((null? instance-name) (myerror "instance name was null"))
       ((null? field-to-lookup) (myerror "field-to-lookup was null"))
+      ((eq? instance-name 'this) (eval-expression field-to-lookup (pop-frame environment) return break continue throw))
+      ((eq? instance-name 'super) (eval-expression field-to-lookup (pop-frame (pop-frame environment)) throw))
       (else (eval-expression field-to-lookup (lookup instance-name environment) return break continue throw)))))
            
 ;;;;;;;; CLASS BIND ;;;;;;;;;;;
@@ -168,10 +172,12 @@
 ;;;please change below
 
 (define interpret-funcall
-  (lambda (funcall environment throw)
+  (lambda (funcall environment return break continue throw)
     (call/cc
      (lambda (return)
        (cond
+         ((list? (car funcall)) (interpret-function-statement-list (cadr (get-funcall-closure (car funcall) environment)) (add-parameters-to-environment (car (get-funcall-closure (car funcall) environment)) (parameters funcall) (push-frame environment) return break continue throw) return
+                                                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop")) throw)) ;for dot function
          ((not (exists? (car funcall) environment)) (myerror "Function does not exist")) ;checks if the function exists
          ((null? (cdr funcall)) (interpret-function-statement-list (cadr (lookup (func-name funcall) environment)) (push-frame (pop-frame environment)) return
                                                                    (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop")) throw)) ; checks if there are parameters
@@ -195,6 +201,12 @@
                                                                                 (interpret-statement (car statement-list) environment breakreturn break continue throw)))
                                                         return break continue throw)
                   environment)))))
+
+;another function_closure
+
+(define get-funcall-closure
+  (lambda (dot-funcall environment)
+    (lookup (caddr dot-funcall) (lookup (cadr dot-funcall) environment))))
 
 (define func-name car)
 (define parameters cdr)
@@ -230,6 +242,14 @@
      (else (add-to-layer (f_actual_parameters (cdr formal) (cdr actual) state return break continue throw) (car formal) (eval-expression (car actual) state return break continue throw))))))
 
 ;Taken from somewhere
+
+(define add-parameters-to-environment
+  (lambda (param-names param-values environment return break continue throw)
+    (cond
+      ((null? param-names) environment)
+      ((not (eq? (length param-names) (length param-values))) (myerror "Mismatching parameters and arguments"))
+      ((list? param-names) (add-parameters-to-environment (parameters param-names) (parameters param-values) (insert (first param-names) (eval-expression (first param-values) (pop-frame environment) return break continue throw) environment) return break continue throw))
+      (else (insert param-names (eval-expression param-values (pop-frame environment)) environment)))))
 
 ;I'm assuming funcall is the same as 
 
@@ -350,7 +370,11 @@
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
   (lambda (statement environment return break continue throw)
-    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment return break continue throw) environment)))
+    ;(cond
+     ; ((list? (get-assign-lhs statement)) (cond ; keep doing dots.
+      ;                                      ((eq? (cadr (cadr statement)) 'this) (update 'nameofvartoupdate 'value environment))
+       ;                                     ((eq? (cadr (cadr statement)) 'super) 1)))
+      (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment throw) environment)))
 
 ;;;;;;;;; If ;;;;;;;;;
 
@@ -459,7 +483,6 @@
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
       ((and (list? expr) (eq? 'static-funcall (operator expr))) (interpret-main expr environment return break continue throw))
-      ((and (list? expr) (eq? 'funcall (operator expr))) (interpret-funcall expr environment return break continue throw))
       ((not (list? expr)) (lookup expr environment))
       ((eq? (statement-type expr) 'new ) (interpret-new-object expr environment return break continue throw))
       (else (eval-operator expr environment return break continue throw)))))
@@ -472,6 +495,7 @@
     (cond
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment return break continue throw)))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment return break continue throw)))
+      ((eq? (operator expr) 'dot) (interpret-dot (cadr expr) (caddr expr) environment return break continue throw))
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment return break continue throw) environment return break continue throw)))))
 
 ; Complete the evaluation of the binary operator by evaluating the second operand and performing the operation.
@@ -493,7 +517,7 @@
       ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment return break continue throw)))
       ;please change
       ((eq? 'funcall (operator expr)) (interpret-funcall (cdr expr) environment return break continue throw))
-      ((eq? 'dot (operator expr)) (interpret-dot (cadr expr) (caddr expr) environment return break continue throw))
+      ;((eq? 'dot (operator expr)) (interpret-dot (cadr expr) (caddr expr) environment return break continue throw))
       (else (myerror "Unknown operator:" (operator expr))))))
 
 ; Determines if two values are equal.  We need a special test because there are both boolean and integer types.
@@ -733,20 +757,20 @@
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
 
-(trace interpret-main)
-(trace evaluate-main-class)
-(trace interpret-declare)
-(trace find-function-in-closure)
-(trace make-statelayer-from-instance-fields)
-(trace push-frame)
-(trace create-class)
-(trace closure)
-(trace lookup)
-(trace interpret-new-object)
-(trace interpret-statement-list)
-(trace interpret-statement)
+;(trace interpret-main)
+;(trace evaluate-main-class)
+;(trace interpret-declare)
+;(trace find-function-in-closure)
+;(trace make-statelayer-from-instance-fields)
+;(trace push-frame)
+;(trace create-class)
+;(trace closure)
+;(trace lookup)
+;(trace interpret-new-object)
+;(trace interpret-statement-list)
+;(trace interpret-statement)
 
-(trace evaluate-main-class)
+;(trace evaluate-main-class)
     
 ;(parser "test1.java")
 ;(interpret "test1.java" "List")
@@ -755,3 +779,7 @@
 
 (parser "test1.java")
 (interpret "test1.java" 'A) ;15
+(parser "test2.java")
+(interpret "test2.java" 'A) ;12
+(parser "test3.java")
+(interpret "test3.java" 'A) ;125
