@@ -17,7 +17,7 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (append (parser file) '((return (static-funcall main)))) (newenvironment) (string->symbol class) return
+        (interpret-statement-list (append (parser file) '((return (static-funcall main)))) (newenvironment) class return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
@@ -27,16 +27,25 @@
 (define interpret-statement-list
   (lambda (statement-list environment class return break continue throw)
     (if (null? statement-list)
-        (interpret-main statement-list environment return break continue throw)
-        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment class return break continue throw) class return break continue throw))))
+        environment
+        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) class return break continue throw))))
         ; if the parse list is not empty then send to the main function that will sort where we need to go based on which key word we see.
 
 
 ;;;;;;;;; Mstate ;;;;;;;;;
 
+(define interpret-class
+  (lambda (statement-list environment class return break continue throw)
+    (if (null? statement-list)
+        environment
+        (interpret-class (cdr statement-list)
+                         (interpret-statement (car statement-list) environment return break continue throw)
+                         class return break continue throw))))
+
+
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
-  (lambda (statement environment class return break continue throw)
+  (lambda (statement environment return break continue throw)
     (cond
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return break continue throw)) ; return
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment return break continue throw)) ; variable creation
@@ -52,39 +61,30 @@
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw)); defines the functions (add binding)
       ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw)); ??? reuturn break continue throw)); call or runs the functions from bindings
 
-      ((eq? (statement-type statement) 'class) (create-class statement environment class return break continue throw)) ;create a class closure
-      ((eq? (statement-type statement) 'static-function) (interpret-function statement environment return break continue throw)) ;runs static functions
+      ((eq? (statement-type statement) 'class) (create-class statement environment return break continue throw)) ;create a class closure
+      ((eq? (statement-type statement) 'static-function) (interpret-main-closure statement environment return break continue throw)) ;runs static functions
       ((eq? (statement-type statement) 'static-funcall) (interpret-main statement environment return break continue throw))
-      ((eq? (statement-type statement) 'new ) (interpret-new-object statement environment return break continue throw))
-
+      ((eq? (statement-type statement) 'new ) (interpret-new statement environment return break continue throw))
       ;((eq? (statement-type statement) 'static-var) (interpret-static-funcall statement environment return break continue throw))
-      ;((eq? 'dot (statement-type statement)) (interpret-dot statement environment return break continue throw))
+      ((eq? (statement-type statement) 'dot) (interpret-dot statement environment return break continue throw))
                        
       (else (myerror "Unknown statement:" (statement-type statement)))))) ; error
            
 ;;;;;;;; CLASS BIND ;;;;;;;;;;;
 
 (define create-class
-  (lambda (statement environment class return break continue throw)
+  (lambda (statement environment return break continue throw)
     (cond
       ((null? statement) (myerror "No class closure"))
-      ((null? (c_instances statement)) (insert (c_name statement) (cons  (c_instances statement) (interpret-statement (car (c_methods statement)) environment class return break continue throw)) environment))
-      (else (insert (c_name statement)
-                    (cons  (interpret-statement (c_instances statement) environment class return break continue throw)
-                           (interpret-statement (car (c_methods statement)) environment class return break continue throw))
-                    environment)))))
+      (else (insert (c_name statement) (c_methods statement) environment)))))
 
 (define c_name
   (lambda (statement)
     (cadr statement)))
 
-(define c_instances
-  (lambda (statement)
-    (caddr statement)))
-
 (define c_methods
   (lambda (statement)
-    (cadddr statement)))
+    (cddr statement)))
 
 
 ;;;;;;;;; FUNCTION BIND ;;;;;;;;;
@@ -127,7 +127,7 @@
   (lambda (statement environment return break continue throw)
     (call/cc
        (lambda (return)
-         (interpret-statement-list (closure_body (closure (f_name statement) environment)) (newstate statement environment return break continue throw) class return break continue throw)))))
+         (interpret-statement-list (closure_body (closure (f_name statement) environment)) (newstate statement environment return break continue throw) return break continue throw)))))
 
 ; Get the closure
 (define closure 
@@ -169,27 +169,66 @@
 
 ;;;;;;;;; EVALUATE MAIN ;;;;;;;;;
 
+(define interpret-main-closure
+  (lambda (statement environment return break continue throw)
+     (cond
+       ((null? statement) (error "Mistake?"))
+       ((insert (f_name statement)
+                (list (f_parameters statement) (f_body statement) (lambda (state) (f_scope statement state))) environment)))))
+
+
 (define interpret-main
-  (lambda (statement environment class return break continue throw)
+  (lambda (class environment return break continue throw)
     (call/cc
        (lambda (return)
-         (interpret-statement-list (closure_body (closure (f_name statement) (function-env environment))) ;(newstate statement environment return break continue throw)
-                                   environment class return break continue throw)))))
+         (interpret-statement-list (main-b class environment)
+                                   (interpret-class (function-env environment) (push-frame environment) class return break continue throw)
+                                   class return break continue throw)))))
 
 (define function-env
   (lambda (environment)
-    (cdr (unbox (caadar environment)))))
+    (car (cdr (unbox (caadar environment))))))
+
+(define class_name
+  (lambda (environment)
+    (car (car (car environment)))))
+
+(define main-b
+  (lambda (class environment)
+    (cadr (main-body 'main (cadr (lookup class environment))))))
+
+(define main-body
+  (lambda (name environment)
+    (cond
+        ((null? environment) (myerror "Cannot find function"))
+        ((eq? name (cadar environment)) (cddar environment))
+        (else (main-body  name (cdr environment))))))
 
 ;;;;;;;;; NEW ;;;;;;;;;
 
 
-; MIGHT BE DOING THIS WRONG?!?!?!
+; Adds the function information to the new Variable
 
-(define interpret-new-object
-  (lambda (statement environment class return break continue throw)
+(define interpret-new
+  (lambda (statement environment return break continue throw)
     (cond
-      ((state_empty environment) '())
-      (lookup-in-env class environment))))
+      ((null? statement) (myerror "Statement doesn't exist"))
+      (else (insert (car statement) (unwrap (lookup-in-env (class_name environment) environment)) environment)))))
+
+(define unwrap
+  (lambda (statement)
+    (cdr statement))) 
+
+;;;;;;;; DOT FUNCTION ;;;;;;;;;;;
+
+(define interpret-dot
+  (lambda (instance-name field-to-lookup environment return break continue throw)
+    (cond
+      ((null? instance-name) (myerror "instance name was null"))
+      ((null? field-to-lookup) (myerror "field-to-lookup was null"))
+      ((eq? instance-name 'this) (eval-expression field-to-lookup (pop-frame environment) return break continue throw))
+      ((eq? instance-name 'super) (eval-expression field-to-lookup (pop-frame environment) return break continue throw))
+      (else (eval-expression field-to-lookup (lookup instance-name environment) return break continue throw)))))
 
                    
 ;;;;;;;;; RETURN ;;;;;;;;;
@@ -204,8 +243,10 @@
 ; Adds a new variable binding to the environment.  There may be an assignment with the variable
 (define interpret-declare
   (lambda (statement environment return break continue throw)
-    (if (exists-declare-value? statement) (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment return break continue throw) environment)
-        (insert (get-declare-var statement) 'novalue environment))))
+    (cond
+    ((and (exists-declare-value? statement) (list? (get-declare-value statement))) (interpret-new (cdr statement) environment return break continue throw))
+    ((exists-declare-value? statement) (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment return break continue throw) environment))
+    (else (insert (get-declare-var statement) 'novalue environment)))))
 
 ;;;;;;;;; Assignment ;;;;;;;;;
 
@@ -220,7 +261,7 @@
 (define interpret-if
   (lambda (statement environment return break continue throw)
     (cond
-      ((eval-expression (get-condition statement) environment return break continue throw) (interpret-statement (get-then statement) environment class return break continue throw))
+      ((eval-expression (get-condition statement) environment return break continue throw) (interpret-statement (get-then statement) environment return break continue throw))
       ((exists-else? statement) (interpret-statement (get-else statement) environment return break continue throw))
       (else environment))))
 
@@ -233,7 +274,7 @@
      (lambda (break)
        (letrec ((loop (lambda (condition body environment)
                         (if (eval-expression condition environment return null null throw) ;;;;;;;;;;;;;;;;;;; BAD NULLS
-                            (loop condition body (interpret-statement body environment class return break (lambda (env) (break (loop condition body env))) throw))
+                            (loop condition body (interpret-statement body environment return break (lambda (env) (break (loop condition body env))) throw))
                          environment))))
          (loop (get-condition statement) (get-body statement) environment))))))
 
@@ -241,10 +282,9 @@
 
 ; Interprets a block.  The break, continue, and throw continuations must be adjusted to pop the environment
 (define interpret-block
-  (lambda (statement environment class return break continue throw)
+  (lambda (statement environment return break continue throw)
     (pop-frame (interpret-statement-list (cdr statement)
                                          (push-frame environment)
-                                         class
                                          return
                                          (lambda (env) (break (pop-frame env)))
                                          (lambda (env) (continue (pop-frame env)))
@@ -315,10 +355,10 @@
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
-      ((and (list? expr) (eq? 'static-funcall (operator expr))) (interpret-main expr environment return break continue throw))
+      ((and (list? expr) (eq? 'static-funcall (operator expr))) (interpret-main (class_name environment) environment return break continue throw))
       ((and (list? expr) (eq? 'funcall (operator expr))) (interpret-funcall expr environment return break continue throw))
       ((not (list? expr)) (lookup expr environment))
-      ((eq? (statement-type expr) 'new ) (interpret-new-object expr environment return break continue throw))
+      ((eq? (statement-type expr) 'new ) (interpret-new expr environment return break continue throw))
       (else (eval-operator expr environment return break continue throw)))))
 
 ; Evaluate a binary (or unary) operator.  Although this is not dealing with side effects, I have the routine evaluate the left operand first and then
@@ -328,6 +368,7 @@
   (lambda (expr environment return break continue throw)
     (cond
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment return break continue throw)))
+      ((eq? (operator expr)  'dot) (interpret-dot (cadr expr) (caddr expr) environment return break continue throw))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment return break continue throw)))
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment return break continue throw) environment return break continue throw)))))
 
@@ -448,7 +489,7 @@
 (define if_variable_there
   (lambda (var S)
     (cond
-      ((null? S) #f)
+      ((null? S) #f) 
       ((null? (firstlayer S)) #f)
       ((eq? (firstlayer S) var) #t)
       (else (if_variable_there var (restlayer S) )))))
@@ -587,13 +628,22 @@
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
 
-(trace interpret-main)
-(trace interpret-declare)
-(trace closure)
-(trace lookup)
-(trace interpret-new-object)
+;(trace interpret-main)
+;(trace interpret-declare)
+;(trace create-class)
+;(trace closure)
+;(trace lookup)
+;(trace interpret-new)
+;(trace interpret-statement-list)
+;(trace interpret-statement)
+;(trace interpret-return)
+;(trace interpret-class)
+;(trace eval-expression)
+;(trace interpret-dot)
+
+
     
-;(parser "test1.java")
-;(interpret "test1.java" "List")
+(parser "test1.java")
+(interpret "test1.java" 'A)
 ;(parser "basic.java")
 ;(interpret "basic.java" "B")
